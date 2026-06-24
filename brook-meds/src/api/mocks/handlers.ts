@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw';
-import { patients, prescriptions, dispenseEvents, waitTimeMetric } from './fixtures';
+import { patients, prescriptions, dispenseEvents, waitTimeMetric, cdRegisterEntries, stockLines, wholesalerPrices, analyticsKPI, auditEvents, settingsConfig } from './fixtures';
 import type { DispenseEvent } from '../../lib/types';
 
 export const handlers = [
@@ -89,5 +89,47 @@ export const handlers = [
       },
       allMatch: !isBlock,
     });
+  }),
+  // Phase 4 — CD handlers
+  http.get('/api/semble/cd-register', () => {
+    return HttpResponse.json(cdRegisterEntries);
+  }),
+  http.post('/api/semble/cd-prescription', async () => {
+    return HttpResponse.json({
+      prescriptionId: `rx-cd-${Date.now()}`,
+      cdRegisterEntryId: `cdreg-${Date.now()}`,
+      dispensaryQueueId: `queue-${Date.now()}`,
+    });
+  }),
+  http.post('/api/semble/bnfc-dose', async ({ request }) => {
+    const body = await request.json() as { drug: string; patientWeightKg: number };
+    const min = Math.round(body.patientWeightKg * 0.3);
+    const max = Math.min(Math.round(body.patientWeightKg * 1.0), 60);
+    return HttpResponse.json({ withinRange: true, expectedMin: min, expectedMax: max, ref: 'BNFC 2024, Methylphenidate hydrochloride' });
+  }),
+  // Phase 5 — Inventory + Analytics handlers
+  http.get('/api/semble/inventory', () => HttpResponse.json(stockLines)),
+  http.get('/api/semble/wholesaler-prices/:gtin', ({ params }) => {
+    const prices = wholesalerPrices[params.gtin as string] ?? [
+      { wholesaler: 'AAH', pricePerPack: 5.00, cdLicensed: false },
+      { wholesaler: 'Alliance', pricePerPack: 5.20, cdLicensed: false },
+      { wholesaler: 'Phoenix', pricePerPack: 4.90, cdLicensed: false },
+    ];
+    return HttpResponse.json(prices);
+  }),
+  http.get('/api/semble/analytics', () => HttpResponse.json(analyticsKPI)),
+  // Phase 6 — Audit + Settings handlers
+  http.get('/api/semble/audit/dispense/:dispenseId', ({ params }) => {
+    const events = auditEvents.filter(e => e.dispenseId === params.dispenseId);
+    return HttpResponse.json(events);
+  }),
+  http.get('/api/semble/audit/:patientId', ({ params }) => {
+    const events = auditEvents.filter(e => e.patientId === params.patientId);
+    return HttpResponse.json(events);
+  }),
+  http.get('/api/settings', () => HttpResponse.json(settingsConfig)),
+  http.patch('/api/settings', async ({ request }) => {
+    const body = await request.json();
+    return HttpResponse.json({ ...settingsConfig, ...(body as object) });
   }),
 ];

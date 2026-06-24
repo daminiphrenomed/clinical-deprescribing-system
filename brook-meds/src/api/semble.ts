@@ -1,4 +1,4 @@
-import type { Patient, Prescription, DispenseEvent, WaitTimeMetric } from '../lib/types';
+import type { Patient, Prescription, DispenseEvent, WaitTimeMetric, CDRegisterEntry, CDPrescriptionDraft, BNFCDoseResult, StockLine, AnalyticsKPI, AuditEvent, SettingsConfig } from '../lib/types';
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(path, options);
@@ -61,5 +61,58 @@ export async function executeDispense(prescriptionId: string, witnessPin?: strin
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prescriptionId, witnessPin }),
+  });
+}
+
+// Phase 4
+export async function fetchCDRegister(): Promise<CDRegisterEntry[]> {
+  return apiFetch('/api/semble/cd-register');
+}
+
+export async function submitCDPrescription(draft: CDPrescriptionDraft): Promise<{
+  prescriptionId: string; cdRegisterEntryId: string; dispensaryQueueId: string;
+}> {
+  return apiFetch('/api/semble/cd-prescription', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(draft),
+  });
+}
+
+export async function calculateBNFCDose(drug: string, patientWeightKg: number): Promise<BNFCDoseResult> {
+  return apiFetch('/api/semble/bnfc-dose', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ drug, patientWeightKg }),
+  });
+}
+
+// Phase 5
+export async function fetchInventory(): Promise<StockLine[]> {
+  return apiFetch('/api/semble/inventory');
+}
+
+export async function fetchAnalytics(): Promise<AnalyticsKPI> {
+  return apiFetch('/api/semble/analytics');
+}
+
+// Phase 6
+export async function fetchAuditTrail(patientId: string): Promise<AuditEvent[]> {
+  return apiFetch(`/api/semble/audit/${patientId}`);
+}
+
+export async function fetchDispenseAudit(dispenseId: string): Promise<AuditEvent[]> {
+  return apiFetch(`/api/semble/audit/dispense/${dispenseId}`);
+}
+
+export async function fetchSettings(): Promise<SettingsConfig> {
+  return apiFetch('/api/settings');
+}
+
+export async function updateSettings(patch: Partial<SettingsConfig>): Promise<SettingsConfig> {
+  return apiFetch('/api/settings', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
   });
 }

@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { differenceInHours } from 'date-fns';
-import { ArrowLeft, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Clock, RotateCcw, FileText } from 'lucide-react';
 import { fetchPatientFull } from '../../api/semble';
 import type { Patient, Prescription, DispenseEvent } from '../../lib/types';
 import AccountabilityStrip from '../../components/shared/AccountabilityStrip';
 import InsightStrip from '../../components/shared/InsightStrip';
 import SembleStrip from '../../components/shared/SembleStrip';
 import Toast from '../../components/shared/Toast';
+import AuditTrailModal from '../../components/shared/AuditTrailModal';
 import IssueRepeatModal from './IssueRepeatModal';
 import ReprintLabelModal from './ReprintLabelModal';
 import { fmtDate, fmtDateTime } from '../../lib/formatters';
+import { isDispenseBlocked } from '../reconciliation/engine';
 
 const REPRINT_WINDOW_HOURS = 72;
 
@@ -29,6 +31,7 @@ export default function PatientScreen() {
   const [loading, setLoading] = useState(true);
   const [issueModal, setIssueModal] = useState<Prescription | null>(null);
   const [reprintModal, setReprintModal] = useState<DispenseEvent | null>(null);
+  const [auditDispenseId, setAuditDispenseId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ title: string; message: string } | null>(null);
 
   useEffect(() => {
@@ -186,9 +189,15 @@ export default function PatientScreen() {
                   )}
                 </div>
                 <button
-                  onClick={() => navigate(`/scan?prescription=${rx.id}&quantity=${rx.quantity}`)}
+                  onClick={() => !isDispenseBlocked(rx) && navigate(`/scan?prescription=${rx.id}&quantity=${rx.quantity}`)}
+                  disabled={isDispenseBlocked(rx)}
+                  title={isDispenseBlocked(rx) ? 'Resolve reconciliation conflict before dispensing.' : 'Dispense'}
                   className="px-4 py-2 rounded-action text-white text-sm font-medium shrink-0"
-                  style={{ background: 'var(--accent)' }}
+                  style={{
+                    background: isDispenseBlocked(rx) ? 'var(--border-strong)' : 'var(--accent)',
+                    cursor: isDispenseBlocked(rx) ? 'not-allowed' : 'pointer',
+                    opacity: isDispenseBlocked(rx) ? 0.6 : 1,
+                  }}
                 >
                   Dispense
                 </button>
@@ -302,6 +311,18 @@ export default function PatientScreen() {
                       <RotateCcw size={12} />
                       Reprint
                     </button>
+                    <button
+                      onClick={() => setAuditDispenseId(ev.id)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-action text-xs font-medium"
+                      style={{
+                        background: 'var(--bg)',
+                        color: 'var(--text-muted)',
+                        border: '1px solid var(--border)',
+                      }}
+                    >
+                      <FileText size={12} />
+                      View audit
+                    </button>
                     {!withinWindow && (
                       <span className="text-xs" style={{ color: 'var(--text-faint)' }}>72h window closed</span>
                     )}
@@ -326,6 +347,14 @@ export default function PatientScreen() {
           dispenseEvent={reprintModal}
           onClose={() => setReprintModal(null)}
           onConfirm={handleReprintConfirm}
+        />
+      )}
+
+      {/* Audit trail modal */}
+      {auditDispenseId && (
+        <AuditTrailModal
+          dispenseId={auditDispenseId}
+          onClose={() => setAuditDispenseId(null)}
         />
       )}
 
